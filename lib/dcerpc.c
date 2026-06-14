@@ -268,6 +268,9 @@ struct dcerpc_pdu {
          */
         int is_conformance_run;
         int max_alignment;
+
+        int size_is;   /* Passing size_is() value through a pointer */
+        int switch_is; /* Passing switch_is() value through a pointer */
 };
 
 int
@@ -897,36 +900,48 @@ int
 dcerpc_carray_coder(struct dcerpc_context *ctx,
                     struct dcerpc_pdu *pdu,
                     struct smb2_iovec *iov, int *offset,
-                    void *ptr, int elem_size, dcerpc_coder coder)
+                    int num, void *ptr, int elem_size, dcerpc_coder coder)
 {
-        struct dcerpc_carray *carray = ptr;
         int i;
         uint64_t p;
+        uint8_t *data = ptr;
 
         /* Conformance */
-        p = carray->max_count;
+        p = num;
         if (dcerpc_conformance_coder(ctx, pdu, iov, offset, &p)) {
                 return -1;
         }
-        carray->max_count = p;
-
-        if (dcerpc_pdu_direction(pdu) == DCERPC_DECODE) {
-                if (carray->max_count && carray->data == NULL) {
-                        carray->data = smb2_alloc_data(
-                                dcerpc_get_smb2_context(ctx),
-                                dcerpc_get_pdu_payload(pdu),
-                                carray->max_count * elem_size);
-                        if (carray->data == NULL) {
-                                return -1;
-                        }
-                }
+        if (p != num) {
+                return -1;
         }
-        
+
         /* Data */
         for (i = 0; i < p; i++) {
-                if (coder(ctx, pdu, iov, offset, &carray->data[i * elem_size])) {
+                if (coder(ctx, pdu, iov, offset, &data[i * elem_size])) {
                         return -1;
                 }
+        }
+
+        return 0;
+}
+
+int dcerpc_union_coder(struct dcerpc_context *ctx,
+                       struct dcerpc_pdu *pdu,
+                       struct smb2_iovec *iov, int *offset,
+                       uint32_t *switch_is, void *ptr, dcerpc_coder coder)
+{
+        uint64_t p;
+
+        /* Conformance */
+        p = *switch_is;
+        if (dcerpc_uint3264_coder(ctx, pdu, iov, offset, &p)) {
+                return -1;
+        }
+
+        /* Data */
+        dcerpc_set_switch_is(pdu, p);
+        if (coder(ctx, pdu, iov, offset, ptr)) {
+                return -1;
         }
 
         return 0;
@@ -1955,4 +1970,23 @@ int dcerpc_get_cr(struct dcerpc_pdu *pdu)
         return pdu->is_conformance_run;
 }
 
-                                                 
+void dcerpc_set_size_is(struct dcerpc_pdu *pdu, int size_is)
+{
+        pdu->size_is = size_is;
+}
+
+int dcerpc_get_size_is(struct dcerpc_pdu *pdu)
+{
+        return pdu->size_is;
+}
+
+void dcerpc_set_switch_is(struct dcerpc_pdu *pdu, int switch_is)
+{
+        pdu->switch_is = switch_is;
+}
+
+int dcerpc_get_switch_is(struct dcerpc_pdu *pdu)
+{
+        return pdu->switch_is;
+}
+

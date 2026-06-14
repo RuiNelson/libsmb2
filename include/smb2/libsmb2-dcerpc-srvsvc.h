@@ -54,14 +54,9 @@ int srvsvc_SHARE_INFO_0_coder(struct dcerpc_context *ctx,
                               struct smb2_iovec *iov, int *offset,
                               void *ptr);
 
-struct srvsvc_SHARE_INFO_0_carray {
-        uint32_t max_count;
-        struct srvsvc_SHARE_INFO_0 *share_info_0;
-};
-
 struct srvsvc_SHARE_INFO_0_CONTAINER {
         uint32_t EntriesRead;
-        struct srvsvc_SHARE_INFO_0_carray *Buffer;
+        struct srvsvc_SHARE_INFO_0 *share_info_0;
 };
 
 struct srvsvc_SHARE_INFO_1 {
@@ -74,14 +69,9 @@ int srvsvc_SHARE_INFO_1_coder(struct dcerpc_context *ctx,
                               struct smb2_iovec *iov, int *offset,
                               void *ptr);
 
-struct srvsvc_SHARE_INFO_1_carray {
-        uint32_t max_count;
-        struct srvsvc_SHARE_INFO_1 *share_info_1;
-};
-
 struct srvsvc_SHARE_INFO_1_CONTAINER {
         uint32_t EntriesRead;
-        struct srvsvc_SHARE_INFO_1_carray *Buffer;
+        struct srvsvc_SHARE_INFO_1 *share_info_1;
 };
         
 int srvsvc_SHARE_INFO_1_CONTAINER_coder(struct dcerpc_context *dce,
@@ -89,17 +79,19 @@ int srvsvc_SHARE_INFO_1_CONTAINER_coder(struct dcerpc_context *dce,
                                         struct smb2_iovec *iov, int *offset,
                                         void *ptr);
 
-struct srvsvc_SHARE_ENUM_UNION {
+union srvsvc_SHARE_ENUM_UNION {
+        struct srvsvc_SHARE_INFO_0_CONTAINER Level0;
+        struct srvsvc_SHARE_INFO_1_CONTAINER Level1;
+};
+
+struct srvsvc_SHARE_ENUM {
         uint32_t Level;
-        union {
-                struct srvsvc_SHARE_INFO_0_CONTAINER Level0;
-                struct srvsvc_SHARE_INFO_1_CONTAINER Level1;
-        };
+        union srvsvc_SHARE_ENUM_UNION ShareEnum;
 };
 
 struct srvsvc_SHARE_ENUM_STRUCT {
         uint32_t Level;
-        struct srvsvc_SHARE_ENUM_UNION ShareInfo;
+        struct srvsvc_SHARE_ENUM ShareInfo;
 };
 
 struct srvsvc_NetrShareEnum_req {
@@ -117,11 +109,13 @@ struct srvsvc_NetrShareEnum_rep {
         uint32_t resume_handle;
 };
 
+union srvsvc_SHARE_INFO_UNION {
+        struct srvsvc_SHARE_INFO_1 ShareInfo1;
+};
+
 struct srvsvc_SHARE_INFO {
-        uint32_t level;
-        union {
-                struct srvsvc_SHARE_INFO_1 ShareInfo1;
-        };
+        uint32_t Level;
+        union srvsvc_SHARE_INFO_UNION ShareInfo;
 };
 
 struct srvsvc_NetrShareGetInfo_req {
