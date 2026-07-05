@@ -776,6 +776,23 @@ smb2_find_pdu(struct smb2_context *smb2,
         return pdu;
 }
 
+/* A failed FSCTL_SRV_COPYCHUNK(_WRITE) request is answered with a full
+ * IOCTL reply carrying the server's copychunk limits instead of an
+ * error body ([MS-SMB2] 3.3.4.4, 3.3.5.15.6.1).
+ */
+static int
+smb2_is_copychunk_ioctl(struct smb2_pdu *pdu)
+{
+        uint32_t ctl_code;
+
+        if (pdu->header.command != SMB2_IOCTL || pdu->out.niov < 2) {
+                return 0;
+        }
+        smb2_get_uint32(&pdu->out.iov[1], 4, &ctl_code);
+        return ctl_code == SMB2_FSCTL_SRV_COPYCHUNK ||
+               ctl_code == SMB2_FSCTL_SRV_COPYCHUNK_WRITE;
+}
+
 static int
 smb2_is_error_response(struct smb2_context *smb2,
                        struct smb2_pdu *pdu) {
@@ -784,6 +801,11 @@ smb2_is_error_response(struct smb2_context *smb2,
                 switch (smb2->hdr.status) {
                 case SMB2_STATUS_MORE_PROCESSING_REQUIRED:
                         return 0;
+                case SMB2_STATUS_INVALID_PARAMETER:
+                        if (smb2_is_copychunk_ioctl(pdu)) {
+                                return 0;
+                        }
+                        return 1;
                 default:
                         return 1;
                 }
