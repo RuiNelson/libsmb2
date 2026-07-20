@@ -349,8 +349,17 @@ void smb2_set_security_mode(struct smb2_context *smb2, uint16_t security_mode);
 
 /*
  * Set whether smb3 encryption should be used or not.
- * 0  : disable encryption. This is the default.
- * !0 : enable encryption.
+ *
+ * If this function is never called, the client still advertises support
+ * for encryption during negotiate, but tolerates a server that doesn't
+ * support/require it; a share that mandates encryption is still used
+ * transparently. Calling this function makes the request explicit:
+ *
+ * 0  : never advertise or use encryption, even if the server or a share
+ *      requires it (the connection/tree-connect will then fail against
+ *      a server/share that mandates encryption).
+ * !0 : require encryption. The connection fails if the server does not
+ *      also negotiate it.
  */
 void smb2_set_seal(struct smb2_context *smb2, int val);
 
@@ -480,6 +489,11 @@ void smb2_set_client_guid(struct smb2_context *smb2, const uint8_t guid[SMB2_GUI
  */
 const char *smb2_get_client_guid(struct smb2_context *smb2);
 
+/*
+ * Returns the server_guid for this context.
+ */
+const char *smb2_get_server_guid(struct smb2_context *smb2);
+        
 /*
  * Asynchronous call to connect a TCP connection to the server
  *
@@ -1236,6 +1250,96 @@ int smb2_readlink_async(struct smb2_context *smb2, const char *path,
  * Sync readlink()
  */
 int smb2_readlink(struct smb2_context *smb2, const char *path, char *buf, uint32_t bufsiz);
+
+/*
+ * SERVER-SIDE COPY
+ */
+/*
+ * Async request-resume-key.
+ *
+ * Returns
+ *  0     : The operation was initiated. The resume key will be reported
+ *          through the callback function.
+ * -errno : There was an error. The callback function will not be invoked.
+ *
+ * When the callback is invoked, status indicates the result:
+ *      0 : Success. Command_data is struct smb2_srv_copychunk_resume_key *.
+ *          This structure must be freed using smb2_free_data().
+ * -errno : An error occurred.
+ */
+int smb2_request_resume_key_async(struct smb2_context *smb2, struct smb2fh *fh,
+                                  smb2_command_cb cb, void *cb_data);
+
+/*
+ * Sync request-resume-key()
+ */
+int smb2_request_resume_key(struct smb2_context *smb2, struct smb2fh *fh,
+                            struct smb2_srv_copychunk_resume_key *resume_key);
+
+/*
+ * Async copychunk.
+ *
+ * Returns
+ *  0     : The operation was initiated. The copy result will be reported
+ *          through the callback function.
+ * -errno : There was an error. The callback function will not be invoked.
+ *
+ * When the callback is invoked, status indicates the result:
+ *      0 : Success. Command_data is struct smb2_srv_copychunk_reply *.
+ *          This structure must be freed using smb2_free_data().
+ * -errno : An error occurred. For server replies that include copy limits,
+ *          command_data may still be struct smb2_srv_copychunk_reply * and
+ *          must be freed using smb2_free_data().
+ */
+int smb2_copychunk_async(struct smb2_context *smb2,
+                         uint32_t ctl_code,
+                         const struct smb2_srv_copychunk_resume_key *resume_key,
+                         struct smb2fh *dstfh,
+                         const struct smb2_srv_copychunk *chunks,
+                         uint32_t chunk_count,
+                         smb2_command_cb cb, void *cb_data);
+
+/*
+ * Sync copychunk(). If the server returns copy-limit information together
+ * with an error status, reply is populated before the error is returned.
+ */
+int smb2_copychunk(struct smb2_context *smb2,
+                   uint32_t ctl_code,
+                   const struct smb2_srv_copychunk_resume_key *resume_key,
+                   struct smb2fh *dstfh,
+                   const struct smb2_srv_copychunk *chunks,
+                   uint32_t chunk_count,
+                   struct smb2_srv_copychunk_reply *reply);
+
+/*
+ * Async server-side copy helper. This requests a resume key for srcfh and
+ * issues a copychunk request to dstfh using the provided chunk array.
+ *
+ * When the callback is invoked, status indicates the result:
+ *      0 : Success. Command_data is struct smb2_srv_copychunk_reply *.
+ *          This structure must be freed using smb2_free_data().
+ * -errno : An error occurred. For server replies that include copy limits,
+ *          command_data may still be struct smb2_srv_copychunk_reply * and
+ *          must be freed using smb2_free_data().
+ */
+int smb2_server_side_copy_async(struct smb2_context *smb2,
+                                uint32_t ctl_code,
+                                struct smb2fh *srcfh, struct smb2fh *dstfh,
+                                const struct smb2_srv_copychunk *chunks,
+                                uint32_t chunk_count,
+                                smb2_command_cb cb, void *cb_data);
+
+/*
+ * Sync server-side copy helper. If the server returns copy-limit information
+ * together with an error status, reply is populated before the error is
+ * returned.
+ */
+int smb2_server_side_copy(struct smb2_context *smb2,
+                          uint32_t ctl_code,
+                          struct smb2fh *srcfh, struct smb2fh *dstfh,
+                          const struct smb2_srv_copychunk *chunks,
+                          uint32_t chunk_count,
+                          struct smb2_srv_copychunk_reply *reply);
 
 /*
  * Async echo()

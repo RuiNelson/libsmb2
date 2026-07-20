@@ -2360,7 +2360,7 @@ yaml_carray_coder(char *name, struct dcerpc_context *ctx,
 
         if (pdu->direction == DCERPC_DECODE) {
                 printf("yaml carray not supported for %s\n", name);
-                exit(9);
+                return -1;
         } else {
                 yaml_print_preamble(ctx, pdu, iov, offset);
                 if (*offset + 256 < iov->len) {
