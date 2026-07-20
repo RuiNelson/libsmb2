@@ -132,6 +132,23 @@ enum smb2_recv_state {
 #define MAX_CREDITS 1024
 #define SMB2_SALT_SIZE 32
 
+/*
+ * Tri-state for smb2->seal_requested, tracking what the caller asked for
+ * via smb2_set_seal()/the "seal=" URL argument, as distinct from whether
+ * sealing is currently active (smb2->seal):
+ *   SMB2_SEAL_NONE  : caller explicitly disabled encryption (seal=0). Do
+ *                     not advertise SMB2_GLOBAL_CAP_ENCRYPTION at all.
+ *   SMB2_SEAL_MAYBE : default, nobody called smb2_set_seal(). Advertise
+ *                     the capability, but tolerate a server that doesn't
+ *                     support/require it.
+ *   SMB2_SEAL_MUST  : caller explicitly requested encryption (seal=1).
+ *                     Advertise the capability and fail the connection if
+ *                     the server does not also negotiate it.
+ */
+#define SMB2_SEAL_NONE  (-1)
+#define SMB2_SEAL_MAYBE   0
+#define SMB2_SEAL_MUST    1
+
 struct sync_cb_data {
 	int is_finished;
 	int status;
@@ -179,6 +196,7 @@ struct smb2_context {
         int credits;
 
         char client_guid[16];
+        char server_guid[16];
 
         uint32_t tree_id[SMB2_MAX_TREE_NESTING];
         int  tree_id_top;
@@ -190,6 +208,7 @@ struct smb2_context {
         uint8_t session_key_size;
 
         uint8_t seal:1;
+        int8_t seal_requested;
         uint8_t sign:1;
         uint8_t signing_key[SMB2_KEY_SIZE];
         uint8_t serverin_key[SMB2_KEY_SIZE];
@@ -326,6 +345,12 @@ struct smb2_pdu {
         /* Data we need to retain between request/reply for QUERY INFO */
         uint8_t info_type;
         uint8_t file_info_class;
+
+        /* Data we need to retain between request/reply for IOCTL, since
+         * some ctl codes report errors using the IOCTL reply format
+         * instead of the generic SMB2 error format.
+         */
+        uint32_t ctl_code;
 
         /* For encrypted PDUs */
         uint8_t seal:1;
@@ -518,6 +543,7 @@ int smb2_process_ioctl_request_fixed(struct smb2_context *smb2,
                              struct smb2_pdu *pdu);
 int smb2_process_ioctl_request_variable(struct smb2_context *smb2,
                                 struct smb2_pdu *pdu);
+int smb2_ioctl_status_uses_reply_format(uint32_t ctl_code, uint32_t status);
 
 int smb2_decode_file_basic_info(struct smb2_context *smb2,
                                 void *memctx,
@@ -581,6 +607,10 @@ int smb2_encode_file_normalized_name_info(struct smb2_context *smb2,
                                           struct smb2_iovec *vec);
 int smb2_decode_security_descriptor(struct smb2_context *smb2,
                                     void *memctx,
+                                    struct smb2_security_descriptor *sd,
+                                    struct smb2_iovec *vec);
+int smb2_security_descriptor_size(struct smb2_security_descriptor *sd);
+int smb2_encode_security_descriptor(struct smb2_context *smb2,
                                     struct smb2_security_descriptor *sd,
                                     struct smb2_iovec *vec);
 

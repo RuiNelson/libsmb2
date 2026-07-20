@@ -25,8 +25,14 @@ extern "C" {
 
 #include <smb2/libsmb2-dcerpc.h>
 
+#define SRVSVC_NETRSHAREADD       0x0e
 #define SRVSVC_NETRSHAREENUM      0x0f
 #define SRVSVC_NETRSHAREGETINFO   0x10
+#define SRVSVC_NETRSHARESETINFO   0x11
+#define SRVSVC_NETRSHAREDEL       0x12
+#define SRVSVC_NETRSHAREDELSTICKY 0x13
+#define SRVSVC_NETRSHARECHECK     0x14
+#define SRVSVC_NETRSERVERGETINFO  0x15
 
 struct dcerpc_context;
 struct dcerpc_pdu;
@@ -44,12 +50,13 @@ struct dcerpc_pdu;
 enum SHARE_INFO_enum {
         SHARE_INFO_0 = 0,
         SHARE_INFO_1 = 1,
+        SHARE_INFO_2 = 2,
 };
 
 struct srvsvc_SHARE_INFO_0 {
-        struct dcerpc_utf16 netname;
+        char *netname;
 };
-int srvsvc_SHARE_INFO_0_coder(struct dcerpc_context *ctx,
+int srvsvc_SHARE_INFO_0_coder(char *name, struct dcerpc_context *ctx,
                               struct dcerpc_pdu *pdu,
                               struct smb2_iovec *iov, int *offset,
                               void *ptr);
@@ -60,11 +67,11 @@ struct srvsvc_SHARE_INFO_0_CONTAINER {
 };
 
 struct srvsvc_SHARE_INFO_1 {
-        struct dcerpc_utf16 netname;
+        char *netname;
         uint32_t type;
-        struct dcerpc_utf16 remark;
+        char *remark;
 };
-int srvsvc_SHARE_INFO_1_coder(struct dcerpc_context *ctx,
+int srvsvc_SHARE_INFO_1_coder(char *name, struct dcerpc_context *ctx,
                               struct dcerpc_pdu *pdu,
                               struct smb2_iovec *iov, int *offset,
                               void *ptr);
@@ -74,7 +81,32 @@ struct srvsvc_SHARE_INFO_1_CONTAINER {
         struct srvsvc_SHARE_INFO_1 *share_info_1;
 };
         
-int srvsvc_SHARE_INFO_1_CONTAINER_coder(struct dcerpc_context *dce,
+int srvsvc_SHARE_INFO_1_CONTAINER_coder(char *name, struct dcerpc_context *dce,
+                                        struct dcerpc_pdu *pdu,
+                                        struct smb2_iovec *iov, int *offset,
+                                        void *ptr);
+
+struct srvsvc_SHARE_INFO_2 {
+        char *netname;
+        uint32_t type;
+        char *remark;
+        uint32_t permissions;
+        uint32_t max_users;
+        uint32_t current_users;
+        char *path;
+        char *passwd;
+};
+int srvsvc_SHARE_INFO_2_coder(char *name, struct dcerpc_context *ctx,
+                              struct dcerpc_pdu *pdu,
+                              struct smb2_iovec *iov, int *offset,
+                              void *ptr);
+
+struct srvsvc_SHARE_INFO_2_CONTAINER {
+        uint32_t EntriesRead;
+        struct srvsvc_SHARE_INFO_2 *share_info_2;
+};
+        
+int srvsvc_SHARE_INFO_2_CONTAINER_coder(char *name, struct dcerpc_context *dce,
                                         struct dcerpc_pdu *pdu,
                                         struct smb2_iovec *iov, int *offset,
                                         void *ptr);
@@ -82,57 +114,162 @@ int srvsvc_SHARE_INFO_1_CONTAINER_coder(struct dcerpc_context *dce,
 union srvsvc_SHARE_ENUM_UNION {
         struct srvsvc_SHARE_INFO_0_CONTAINER Level0;
         struct srvsvc_SHARE_INFO_1_CONTAINER Level1;
-};
-
-struct srvsvc_SHARE_ENUM {
-        uint32_t Level;
-        union srvsvc_SHARE_ENUM_UNION ShareEnum;
+        struct srvsvc_SHARE_INFO_2_CONTAINER Level2;
 };
 
 struct srvsvc_SHARE_ENUM_STRUCT {
         uint32_t Level;
-        struct srvsvc_SHARE_ENUM ShareInfo;
+        union srvsvc_SHARE_ENUM_UNION ShareEnum;
 };
 
+union srvsvc_SHARE_INFO {
+        struct srvsvc_SHARE_INFO_0 ShareInfo0;
+        struct srvsvc_SHARE_INFO_1 ShareInfo1;
+        struct srvsvc_SHARE_INFO_2 ShareInfo2;
+};
+
+struct srvsvc_SERVER_INFO_100 {
+        uint32_t platform_id;
+        char *name;
+};
+
+struct srvsvc_SERVER_INFO_101 {
+        uint32_t platform_id;
+        char *name;
+        uint32_t version_major;
+        uint32_t version_minor;
+        uint32_t type;
+        char *comment;
+};
+        
+struct srvsvc_SERVER_INFO_102 {
+        uint32_t platform_id;
+        char *name;
+        uint32_t version_major;
+        uint32_t version_minor;
+        uint32_t type;
+        char *comment;
+        uint32_t users;
+        uint32_t disc;
+        uint32_t hidden;
+        uint32_t announce;
+        uint32_t anndelta;
+        uint32_t licenses;
+        char *userpath;
+};
+        
+struct srvsvc_SERVER_INFO_103 {
+        uint32_t platform_id;
+        char *name;
+        uint32_t version_major;
+        uint32_t version_minor;
+        uint32_t type;
+        char *comment;
+        uint32_t users;
+        uint32_t disc;
+        uint32_t hidden;
+        uint32_t announce;
+        uint32_t anndelta;
+        uint32_t licenses;
+        char *userpath;
+        uint32_t capabilities;
+};
+        
+union srvsvc_SERVER_INFO {
+        struct srvsvc_SERVER_INFO_100 ServerInfo100;
+        struct srvsvc_SERVER_INFO_101 ServerInfo101;
+        struct srvsvc_SERVER_INFO_102 ServerInfo102;
+        struct srvsvc_SERVER_INFO_102 ServerInfo103;
+};
+        
+struct srvsvc_NetrShareAdd_req {
+        char *ServerName;
+        uint32_t Level;
+        union srvsvc_SHARE_INFO InfoStruct;
+        uint32_t ParmErr;
+};
+
+struct srvsvc_NetrShareAdd_rep {
+        uint32_t ParmErr;
+
+        uint32_t status;
+};
+        
 struct srvsvc_NetrShareEnum_req {
-        struct dcerpc_utf16 ServerName;
+        char *ServerName;
         struct srvsvc_SHARE_ENUM_STRUCT ses;
         uint32_t PreferedMaximumLength;
         uint32_t ResumeHandle;
 };
 
 struct srvsvc_NetrShareEnum_rep {
-        uint32_t status;
-
         struct srvsvc_SHARE_ENUM_STRUCT ses;
         uint32_t total_entries;
         uint32_t resume_handle;
-};
 
-union srvsvc_SHARE_INFO_UNION {
-        struct srvsvc_SHARE_INFO_1 ShareInfo1;
-};
-
-struct srvsvc_SHARE_INFO {
-        uint32_t Level;
-        union srvsvc_SHARE_INFO_UNION ShareInfo;
+        uint32_t status;
 };
 
 struct srvsvc_NetrShareGetInfo_req {
-        struct dcerpc_utf16 ServerName;
-        struct dcerpc_utf16 NetName;
+        char *ServerName;
+        char *NetName;
         uint32_t Level;
 };
 
 struct srvsvc_NetrShareGetInfo_rep {
-        uint32_t status;
+        union srvsvc_SHARE_INFO InfoStruct;
 
-        struct srvsvc_SHARE_INFO InfoStruct;
-};
-
-struct srvsvc_rep {
         uint32_t status;
 };
+
+struct srvsvc_NetrShareSetInfo_req {
+        char *ServerName;
+        char *NetName;
+        uint32_t Level;
+        union srvsvc_SHARE_INFO InfoStruct;
+        uint32_t ParmErr;
+};
+
+struct srvsvc_NetrShareSetInfo_rep {
+        uint32_t ParmErr;
+
+        uint32_t status;
+};
+
+struct srvsvc_NetrShareDel_req {
+        char *ServerName;
+        char *NetName;
+        uint32_t Reserved;
+};
+
+struct srvsvc_NetrShareDel_rep {
+
+        uint32_t status;
+};
+
+struct srvsvc_NetrShareCheck_req {
+        char *ServerName;
+        char *Device;
+};
+
+struct srvsvc_NetrShareCheck_rep {
+        uint32_t Type;
+
+        uint32_t status;
+};
+
+struct srvsvc_NetrServerGetInfo_req {
+        char *ServerName;
+        uint32_t Level;
+};
+
+struct srvsvc_NetrServerGetInfo_rep {
+        union srvsvc_SERVER_INFO InfoStruct;
+
+        uint32_t status;
+};
+        
+
 
 /*
  * Async share_enum()
@@ -163,22 +300,49 @@ struct srvsvc_NetrShareEnum_rep *
 smb2_share_enum_sync(struct smb2_context *smb2, enum SHARE_INFO_enum level);
 
 
-int srvsvc_NetrShareEnum_rep_coder(struct dcerpc_context *dce,
+int srvsvc_NetrShareEnum_rep_coder(char *name, struct dcerpc_context *dce,
                                    struct dcerpc_pdu *pdu,
                                    struct smb2_iovec *iov, int *offset,
                                    void *ptr);
-int srvsvc_NetrShareEnum_req_coder(struct dcerpc_context *ctx,
+int srvsvc_NetrShareEnum_req_coder(char *name, struct dcerpc_context *ctx,
                                    struct dcerpc_pdu *pdu,
                                    struct smb2_iovec *iov, int *offset,
                                    void *ptr);
-int srvsvc_NetrShareGetInfo_rep_coder(struct dcerpc_context *dce,
+int srvsvc_NetrShareGetInfo_rep_coder(char *name, struct dcerpc_context *dce,
                                       struct dcerpc_pdu *pdu,
                                       struct smb2_iovec *iov, int *offset,
                                       void *ptr);
-int srvsvc_NetrShareGetInfo_req_coder(struct dcerpc_context *ctx,
+int srvsvc_NetrShareGetInfo_req_coder(char *name, struct dcerpc_context *ctx,
                                       struct dcerpc_pdu *pdu,
                                       struct smb2_iovec *iov, int *offset,
                                       void *ptr);
+int srvsvc_NetrShareSetInfo_rep_coder(char *name, struct dcerpc_context *dce,
+                                      struct dcerpc_pdu *pdu,
+                                      struct smb2_iovec *iov, int *offset,
+                                      void *ptr);
+int srvsvc_NetrShareSetInfo_req_coder(char *name, struct dcerpc_context *ctx,
+                                      struct dcerpc_pdu *pdu,
+                                      struct smb2_iovec *iov, int *offset,
+                                      void *ptr);
+int srvsvc_NetrShareDel_req_coder(char *name, struct dcerpc_context *ctx,
+                                  struct dcerpc_pdu *pdu,
+                                  struct smb2_iovec *iov, int *offset,
+                                  void *ptr);
+int srvsvc_NetrShareDel_rep_coder(char *name, struct dcerpc_context *dce,
+                                  struct dcerpc_pdu *pdu,
+                                  struct smb2_iovec *iov, int *offset,
+                                  void *ptr);
+int srvsvc_NetrServerGetInfo_req_coder(char *name, struct dcerpc_context *ctx,
+                                       struct dcerpc_pdu *pdu,
+                                       struct smb2_iovec *iov, int *offset,
+                                       void *ptr);
+int srvsvc_NetrServerGetInfo_rep_coder(char *name, struct dcerpc_context *ctx,
+                                       struct dcerpc_pdu *pdu,
+                                       struct smb2_iovec *iov, int *offset,
+                                       void *ptr);
+
+extern struct dcerpc_procedure srvsvc_procs[];
+        
 #ifdef __cplusplus
 }
 #endif
