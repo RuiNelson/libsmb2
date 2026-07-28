@@ -92,4 +92,7 @@
 #define yaml_next_kv libsmb2_yaml_next_kv
 #define yaml_print_preamble libsmb2_yaml_print_preamble
 
+struct dcerpc_pdu;
+int libsmb2_dcerpc_pdu_direction(struct dcerpc_pdu *pdu);
+
 #endif /* _LIBSMB2_DCERPC_PREFIX_H_ */
