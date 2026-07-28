@@ -25,7 +25,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "libsmb2.h"
 #include "libsmb2-raw.h"
 #include "libsmb2-dcerpc.h"
-#include "libsmb2-dcerpc-lsa.h"
 #include "libsmb2-dcerpc-srvsvc.h"
 
 #ifndef discard_const
@@ -36,7 +35,7 @@ void ndr_set_tctx(struct dcerpc_context *ctx, int tctx);
 void ndr_set_endian(struct dcerpc_pdu *pdu, int little_endian);
  
 int is_finished;
-struct ndr_context_handle PolicyHandle;
+struct dcerpc_context_handle PolicyHandle;
 
 int usage(void)
 {
