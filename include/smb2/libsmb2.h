@@ -709,7 +709,7 @@ struct smb2dir *smb2_opendir(struct smb2_context *smb2, const char *path);
 
 int smb2_opendir_async(struct smb2_context *smb2, const char *path,
                        smb2_command_cb cb, void *cb_data);
-        
+
 /*
  * closedir()
  */
@@ -786,14 +786,14 @@ struct smb2fh;
 struct smb2_pdu *
 smb2_open_async_pdu(struct smb2_context *smb2, const char *path, int flags,
                     smb2_command_cb cb, void *cb_data, void (*free_cb)(void *));
-        
+
 /*
  * Returns
  *  0     : The operation was initiated. Result of the operation will be
  *          reported through the callback function.
  * -errno : There was an error. The callback function will not be invoked.
  *
- */  
+ */
 int smb2_open_async_with_oplock_or_lease(struct smb2_context *smb2, const char *path, int flags,
                     uint8_t oplock_level, uint32_t lease_state, smb2_lease_key lease_key,
                     smb2_command_cb cb, void *cb_data);
@@ -1179,6 +1179,27 @@ int smb2_rename_async(struct smb2_context *smb2, const char *oldpath,
  * Sync rename()
  */
 int smb2_rename(struct smb2_context *smb2, const char *oldpath,
+                const char *newpath);
+
+/*
+ * Async link()
+ *
+ * Returns
+ *  0     : The operation was initiated. Result of the operation will be
+ *          reported through the callback function.
+ * -errno : There was an error. The callback function will not be invoked.
+ *
+ * When the callback is invoked, status indicates the result:
+ *      0 : Success.
+ * -errno : An error occurred.
+ */
+int smb2_link_async(struct smb2_context *smb2, const char *oldpath,
+                    const char *newpath, smb2_command_cb cb, void *cb_data);
+
+/*
+ * Sync link()
+ */
+int smb2_link(struct smb2_context *smb2, const char *oldpath,
               const char *newpath);
 
 /*
@@ -1501,11 +1522,10 @@ int smb2_serve_port_async(const int fd, const int to_msecs, struct smb2_context 
 int smb2_serve_port(struct smb2_server *server, const int max_connections, smb2_client_connection cb, void *cb_data);
 
 /*
- * Some symbols have moved over to a different header file to allow better
- * separation between dcerpc and smb2, so we need to include this header
- * here to retain compatibility for apps that depend on those symbols.
+ * Share enum (NetrShareEnum levels 0/1/2) is provided by libsmb2.
+ * Full DCE/RPC lives in libdcerpc (see the dcerpc/ headers).
  */
-#include <smb2/libsmb2-dcerpc-srvsvc.h>
+#include <smb2/libsmb2-share-enum.h>
 
 #ifdef __cplusplus
 }

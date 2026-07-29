@@ -2,22 +2,17 @@
 /*
    Copyright (C) 2018 by Ronnie Sahlberg <ronniesahlberg@gmail.com>
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU Lesser General Public License as published by
-   the Free Software Foundation; either version 2.1 of the License, or
-   (at your option) any later version.
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU Lesser General Public License for more details.
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
 
-   You should have received a copy of the GNU Lesser General Public License
-   along with this program; if not, see <http://www.gnu.org/licenses/>.
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef _LIBSMB2_DCERPC_H_
-#define _LIBSMB2_DCERPC_H_
+#ifndef _DCERPC_H_
+#define _DCERPC_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,7 +36,8 @@ typedef int (*dcerpc_coder)(char *name, struct dcerpc_context *dce, struct dcerp
 
 enum dcerpc_encoding {
         ENCODING_NDR    = 0,
-        ENCODING_YAML   = 1
+        ENCODING_YAML   = 1,
+        ENCODING_JSON   = 2
 };
 
 enum ptr_type {
@@ -68,7 +64,7 @@ struct ndr_transfer_syntax {
         uint16_t vers;
 };
 
-struct ndr_context_handle {
+struct dcerpc_context_handle {
         uint32_t context_handle_attributes;
         dcerpc_uuid_t context_handle_uuid;
 };
@@ -83,8 +79,21 @@ struct dcerpc_utf16 {
         const char *utf8;
 };
 
+struct dcerpc_uint32_pretty_printer_bitfield {
+        char *name;
+        uint32_t mask;
+        uint32_t value;
+};
+
+struct dcerpc_uint32_pretty_printer {
+        char *fmt;
+        struct dcerpc_uint32_pretty_printer_bitfield bitfields[];
+};
+
 extern p_syntax_id_t lsa_interface;
 extern p_syntax_id_t srvsvc_interface;
+extern p_syntax_id_t wkssvc_interface;
+extern p_syntax_id_t winreg_interface;
         
 typedef void (*dcerpc_cb)(struct dcerpc_context *dce, int status,
                           void *command_data, void *cb_data);
@@ -135,10 +144,27 @@ struct dcerpc_pdu *dcerpc_allocate_pdu(struct dcerpc_context *dce,
                                        int direction, int payload_size);
 void dcerpc_free_pdu(struct dcerpc_context *dce, struct dcerpc_pdu *pdu);
 
-void dcerpc_set_size_is(struct dcerpc_pdu *pdu, int size_is);
-int dcerpc_get_size_is(struct dcerpc_pdu *pdu);
+/*
+ * Allocate size bytes associated with pdu. Freed automatically when the
+ * PDU is destroyed (dcerpc_free_pdu), or with dcerpc_free_data() if the
+ * primary payload was transferred out of the PDU (e.g. call reply root).
+ */
+void *dcerpc_alloc_data(struct dcerpc_pdu *pdu, size_t size);
+
+void dcerpc_set_size_is(struct dcerpc_pdu *pdu, uint32_t size_is);
+uint32_t dcerpc_get_size_is(struct dcerpc_pdu *pdu);
 void dcerpc_set_switch_is(struct dcerpc_pdu *pdu, int switch_is);
 int dcerpc_get_switch_is(struct dcerpc_pdu *pdu);
+/*
+ * Override MaximumLength (bytes) for the next RPC_UNICODE_STRING /
+ * RPC_UNICODE_STRINGz encode. 0 means derive MaximumLength from content.
+ * Used when the client must advertise a receive buffer larger than the
+ * current string (e.g. MS-RRP BaseRegEnumKey lpNameIn). No-ops unless
+ * the PDU is NDR encode. Cleared after the matching Buffer array is
+ * encoded. Should be even (UTF-16 byte count).
+ */
+void dcerpc_set_unicode_max_length(struct dcerpc_pdu *pdu, uint16_t max_length);
+uint16_t dcerpc_get_unicode_max_length(struct dcerpc_pdu *pdu);
 void dcerpc_set_request(struct dcerpc_pdu *pdu, void *request);
 void *dcerpc_get_request(struct dcerpc_pdu *pdu);
 
@@ -148,11 +174,7 @@ int ndr_ptr_coder(char *name, struct dcerpc_context *dce, struct dcerpc_pdu *pdu
 int ndr_carray_coder(char *name, struct dcerpc_context *ctx,
                      struct dcerpc_pdu *pdu,
                      struct smb2_iovec *iov, int *offset,
-                     int num, void *ptr, int elem_size, dcerpc_coder coder);
-int ndr_context_handle_coder(char *name, struct dcerpc_context *dce,
-                             struct dcerpc_pdu *pdu,
-                             struct smb2_iovec *iov, int *offset,
-                             void *ptr);
+                     uint32_t num, void *ptr, int elem_size, dcerpc_coder coder);
 int ndr_uint8_coder(char *name, struct dcerpc_context *ctx, struct dcerpc_pdu *pdu,
                     struct smb2_iovec *iov, int *offset, void *ptr);
 int ndr_uint16_coder(char *name, struct dcerpc_context *ctx, struct dcerpc_pdu *pdu,
@@ -177,7 +199,14 @@ int ndr_uuid_coder(char *name, struct dcerpc_context *dce,
 int dcerpc_ptr_coder(char *name, struct dcerpc_context *dce, struct dcerpc_pdu *pdu,
                      struct smb2_iovec *iov, int *offset, void *ptr,
                      enum ptr_type type, dcerpc_coder coder);
+int dcerpc_uint16_coder(char *name, struct dcerpc_context *ctx, struct dcerpc_pdu *pdu,
+                        struct smb2_iovec *iov, int *offset, void *ptr);
 int dcerpc_uint32_coder(char *name, struct dcerpc_context *ctx, struct dcerpc_pdu *pdu,
+                        struct smb2_iovec *iov, int *offset, void *ptr);
+int dcerpc_uint32_coder_pp(char *name, struct dcerpc_context *ctx, struct dcerpc_pdu *pdu,
+                           struct smb2_iovec *iov, int *offset, void *ptr,
+                           struct dcerpc_uint32_pretty_printer *pp);
+int dcerpc_uint64_coder(char *name, struct dcerpc_context *ctx, struct dcerpc_pdu *pdu,
                         struct smb2_iovec *iov, int *offset, void *ptr);
 int dcerpc_utf16_coder(char *name, struct dcerpc_context *ctx, struct dcerpc_pdu *pdu,
                        struct smb2_iovec *iov, int *offset, void *ptr);
@@ -186,7 +215,7 @@ int dcerpc_utf16z_coder(char *name, struct dcerpc_context *ctx, struct dcerpc_pd
 int dcerpc_carray_coder(char *name, struct dcerpc_context *ctx,
                         struct dcerpc_pdu *pdu,
                         struct smb2_iovec *iov, int *offset,
-                        int num, void *ptr, int elem_size, dcerpc_coder coder);
+                        uint32_t num, void *ptr, int elem_size, dcerpc_coder coder);
 int dcerpc_union_coder(char *name, struct dcerpc_context *ctx,
                        struct dcerpc_pdu *pdu,
                        struct smb2_iovec *iov, int *offset,
@@ -195,9 +224,39 @@ int dcerpc_struct_coder(char *name, struct dcerpc_context *ctx,
                         struct dcerpc_pdu *pdu,
                         struct smb2_iovec *iov, int *offset,
                         void *ptr, dcerpc_coder coder);
-        
+int dcerpc_context_handle_coder(char *name, struct dcerpc_context *dce,
+                                struct dcerpc_pdu *pdu,
+                                struct smb2_iovec *iov, int *offset,
+                                void *ptr);
+int dcerpc_sid_coder(char *name, struct dcerpc_context *dce,
+                     struct dcerpc_pdu *pdu,
+                     struct smb2_iovec *iov, int *offset,
+                     void *ptr);
+/*
+ * RPC_UNICODE_STRING (MS-DTYP). Buffer is not required to be NUL-terminated.
+ * ptr is char ** (UTF-8).
+ *
+ * RPC_UNICODE_STRINGz is the same layout with a NUL-terminated Buffer —
+ * this is RRP_UNICODE_STRING in MS-RRP. Same nult pattern as
+ * ndr_utf16_coder / ndr_utf16z_coder.
+ *
+ * To advertise a MaximumLength larger than the current content (e.g. MS-RRP
+ * EnumKey / EnumValue / QueryInfoKey buffer parameters), call
+ * dcerpc_set_unicode_max_length() immediately before encoding the string.
+ */
+int dcerpc_RPC_UNICODE_STRING_coder(char *name, struct dcerpc_context *dce,
+                                    struct dcerpc_pdu *pdu,
+                                    struct smb2_iovec *iov, int *offset,
+                                    void *ptr);
+int dcerpc_RPC_UNICODE_STRINGz_coder(char *name, struct dcerpc_context *dce,
+                                     struct dcerpc_pdu *pdu,
+                                     struct smb2_iovec *iov, int *offset,
+                                     void *ptr);
+/* MS-RRP name for the NUL-terminated form */
+#define dcerpc_RRP_UNICODE_STRING_coder dcerpc_RPC_UNICODE_STRINGz_coder
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* !_LIBSMB2_DCERPC_H_ */
+#endif /* !_DCERPC_H_ */

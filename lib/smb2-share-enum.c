@@ -60,10 +60,13 @@
 
 #include "compat.h"
 
+/* Rename internal DCE/RPC symbols so they do not clash with libdcerpc. */
+#include "libsmb2-dcerpc-prefix.h"
+
 #include "smb2.h"
 #include "libsmb2.h"
-#include "libsmb2-dcerpc.h"
-#include "libsmb2-dcerpc-srvsvc.h"
+#include <dcerpc/dcerpc.h>
+#include <dcerpc/dcerpc-srvsvc.h>
 #include "libsmb2-raw.h"
 #include "libsmb2-private.h"
 

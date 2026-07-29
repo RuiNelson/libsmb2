@@ -27,6 +27,8 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "smb2.h"
 #include "libsmb2.h"
 #include "libsmb2-raw.h"
+#include <dcerpc/dcerpc.h>
+#include <dcerpc/dcerpc-srvsvc.h>
 
 #if defined(__amigaos4__) || defined(__AMIGA__) || defined(__AROS__)
 struct pollfd {
@@ -75,22 +77,22 @@ void se_cb(struct smb2_context *smb2, int status,
                 for (i = 0; i < rep->ses.ShareEnum.Level1.EntriesRead; i++) {
                         printf("%-20s %-20s", rep->ses.ShareEnum.Level1.share_info_1[i].netname,
                                rep->ses.ShareEnum.Level1.share_info_1[i].remark);
-                        if ((rep->ses.ShareEnum.Level1.share_info_1[i].type & 3) == SHARE_TYPE_DISKTREE) {
+                        if ((rep->ses.ShareEnum.Level1.share_info_1[i].type & 3) == SRVSVC_SHARE_TYPE_DISKTREE) {
                                 printf(" DISKTREE");
                         }
-                        if ((rep->ses.ShareEnum.Level1.share_info_1[i].type & 3) == SHARE_TYPE_PRINTQ) {
+                        if ((rep->ses.ShareEnum.Level1.share_info_1[i].type & 3) == SRVSVC_SHARE_TYPE_PRINTQ) {
                                 printf(" PRINTQ");
                         }
-                        if ((rep->ses.ShareEnum.Level1.share_info_1[i].type & 3) == SHARE_TYPE_DEVICE) {
+                        if ((rep->ses.ShareEnum.Level1.share_info_1[i].type & 3) == SRVSVC_SHARE_TYPE_DEVICE) {
                                 printf(" DEVICE");
                         }
-                        if ((rep->ses.ShareEnum.Level1.share_info_1[i].type & 3) == SHARE_TYPE_IPC) {
+                        if ((rep->ses.ShareEnum.Level1.share_info_1[i].type & 3) == SRVSVC_SHARE_TYPE_IPC) {
                                 printf(" IPC");
                         }
-                        if (rep->ses.ShareEnum.Level1.share_info_1[i].type & SHARE_TYPE_TEMPORARY) {
+                        if (rep->ses.ShareEnum.Level1.share_info_1[i].type & SRVSVC_SHARE_TYPE_TEMPORARY) {
                                 printf(" TEMPORARY");
                         }
-                        if (rep->ses.ShareEnum.Level1.share_info_1[i].type & SHARE_TYPE_HIDDEN) {
+                        if (rep->ses.ShareEnum.Level1.share_info_1[i].type & SRVSVC_SHARE_TYPE_HIDDEN) {
                                 printf(" HIDDEN");
                         }
                         printf("\n");
@@ -167,6 +169,9 @@ int main(int argc, char *argv[])
         }
         if (url->user) {
                 smb2_set_user(smb2, url->user);
+        }
+        if (url->domain) {
+                smb2_set_domain(smb2, url->domain);
         }
 
         smb2_set_security_mode(smb2, SMB2_NEGOTIATE_SIGNING_ENABLED);
